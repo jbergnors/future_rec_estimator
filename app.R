@@ -2,274 +2,509 @@
 # APP: Recurrence forecasting
 #--------------------------------------------------
 
- #--------------------------------------------------
- # Libraries
- #--------------------------------------------------
+#--------------------------------------------------
+# Libraries
+#--------------------------------------------------
 
- if (!requireNamespace("dplyr", quietly = TRUE)) {
-   install.packages("dplyr")}
+if (!requireNamespace("tidyverse", quietly = TRUE)) {
+  install.packages("tidyverse")}
 
- if (!requireNamespace("ggplot2", quietly = TRUE)) {
-   install.packages("ggplot2")}
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  install.packages("ggplot2")}
 
- if (!requireNamespace("shiny", quietly = TRUE)) {
-   install.packages("shiny")}
+if (!requireNamespace("shiny", quietly = TRUE)) {
+  install.packages("shiny")}
 
- if (!requireNamespace("bslib", quietly = TRUE)) {
-   install.packages("bslib")}
+if (!requireNamespace("plotly", quietly = TRUE)) {
+  install.packages("plotly")}
 
- if (!requireNamespace("sn", quietly = TRUE)) {
-   install.packages("sn")}
+if (!requireNamespace("bslib", quietly = TRUE)) {
+  install.packages("bslib")}
 
- library(dplyr)
- library(ggplot2)
- library(shiny)
- library(bslib)
- library(sn)
- 
+if (!requireNamespace("sn", quietly = TRUE)) {
+  install.packages("sn")}
 
- #--------------------------------------------------
- # Data
- #--------------------------------------------------
-
- df_populations <- readRDS("df_populations.RDS")
-
- #--------------------------------------------------
- # GGplot theme
- #--------------------------------------------------
- # Color palette 
- col_palette <- c(
-   "#287233",  # Model 1: clinical
-   "#9A3B6A",  # Model 2: age
-   "#A6B54A",  # Model 3: ancestry
-   "#2E5A8A",  # Model 4: ancestry
-   "#A23A44",  # Model 5: PHS5
-   "#E69F00"
- )
+library(tidyverse)
+library(ggplot2)
+library(shiny)
+library(plotly)
+library(bslib)
+library(sn)
 
 
- theme_app <- function () { 
-   theme_classic(base_size=10) %+replace% 
-     theme(
-       legend.position = "right",
-       legend.title = element_text(size = 10, face = "bold"),
-       legend.text = element_text(size = 10), 
-       plot.title = element_text(size = 10, face = "bold", lineheight = 1.5, 
-                                 hjust = 0, margin = margin(0,0,5,0)),
-       plot.title.position = "plot", 
-       plot.subtitle = element_text(size = 10, face = "italic",
-                                    lineheight = 1.5, hjust = 0,
-                                    margin = margin(0,0,10,0)),
-       plot.caption.position = "plot",
-       plot.margin = margin(10,10,10,10),
-       axis.line = element_line(linetype = "solid", color = "black"),
-       axis.text.y = element_text(size = 10, face = "plain", hjust = 1, margin = margin(0,5,0,0)),
-       axis.title.y = element_text(size = 10, face = "bold", hjust = 0.5, angle = 90, margin = margin(0,10,0,0)),
-       axis.text.x = element_text(size = 10, face = "plain", margin = margin(5,0,0,0)),
-       axis.title.x = element_text(size = 10, face = "bold", hjust = 0.5, margin = margin(10,0,5,0)),
-       panel.spacing = unit(1.5, "lines"),
-       strip.text = element_text(face = "bold", size = 12, hjust = 0.5),
-       strip.text.x = element_text(size = 10, color = "black", face = "bold", hjust = 0.5, margin = margin(t = 4, b = 4)),  
-       strip.background = element_rect(fill = "#E69F00", color = "black", linewidth = 1)    
-     )
- }
+#--------------------------------------------------
+# Data
+#--------------------------------------------------
+
+df_populations <- readRDS("df_populations.RDS")
+
+#--------------------------------------------------
+# GGplot theme
+#--------------------------------------------------
+# Color palette 
+col_palette <- c(
+  "#287233",
+  "#9A3B6A",
+  "#A6B54A",
+  "#2E5A8A",
+  "#A23A44",
+  "#E69F00"
+)
 
 
- #--------------------------------------------------
- # Age simulation function
- #--------------------------------------------------
+theme_app <- function () { 
+  theme_classic(base_size=10) %+replace% 
+    theme(
+      legend.position = "right",
+      legend.title = element_text(size = 12, face = "bold"),
+      legend.text = element_text(size = 10), 
+      plot.title = element_text(size = 10, face = "bold", lineheight = 1.5, 
+                                hjust = 0, margin = margin(0,0,5,0)),
+      plot.title.position = "plot", 
+      plot.subtitle = element_text(size = 10, face = "italic",
+                                   lineheight = 1.5, hjust = 0,
+                                   margin = margin(0,0,10,0)),
+      plot.caption.position = "plot",
+      plot.margin = margin(10,10,10,10),
+      axis.line = element_line(linetype = "solid", color = "black"),
+      axis.text.y = element_text(size = 10, face = "plain", hjust = 1, margin = margin(0,5,0,0)),
+      axis.title.y = element_text(size = 12, face = "bold", hjust = 0.5, angle = 90, margin = margin(0,10,0,0)),
+      axis.text.x = element_text(size = 10, face = "plain", margin = margin(5,0,0,0)),
+      axis.title.x = element_text(size = 12, face = "bold", hjust = 0.5, margin = margin(10,0,5,0)),
+      panel.spacing = unit(1.5, "lines"),
+      strip.text = element_text(face = "bold", size = 12, hjust = 0.5),
+      strip.text.x = element_text(size = 10, color = "black", face = "bold", hjust = 0.5, margin = margin(t = 4, b = 4)),  
+      strip.background = element_rect(fill = "#E69F00", color = "black", linewidth = 1)    
+    )
+}
 
- simulate_age <- function(n, median, min_age, max_age) {
-   
-   alpha <- -2
-   
-   omega <- (max_age - min_age) / 4.2
-   
-   median_z <- -0.584  
-   xi_corrected <- median - (median_z * omega)
-   
-   age <- numeric(0)
-   while(length(age) < n) {
-     x <- sn::rsn(
-       n = n * 2, 
-       xi = xi_corrected,
-       omega = omega,
-       alpha = alpha
-     )
-     x <- x[x >= min_age & x <= max_age]
-     age <- c(age, x)
-   }
-   
-   return(round(age[1:n]))
- }
- 
 
- #--------------------------------------------------
- # Recurrence rate function
- #--------------------------------------------------
- # Timing of recurrences 5 years postoperative
- recurrence_timing <- list(
-   "Stage I"   = c("1" = 0.26, "2" = 0.28, "3" = 0.19, "4" = 0.17, "5" = 0.10),
-   "Stage II"   = c("1" = 0.30, "2" = 0.34, "3" = 0.19, "4" = 0.13, "5" = 0.03),
-   "Stage III"   = c("1" = 0.40, "2" = 0.31, "3" = 0.17, "4" = 0.08, "5" = 0.04)
- )
+#--------------------------------------------------
+# Age simulation function
+#--------------------------------------------------
 
- timing_df <- tibble(
-   stage = names(recurrence_timing),
-   timing = recurrence_timing
- ) %>% 
-   tidyr::unnest_longer(timing, indices_to = "offset") %>% 
-   mutate(offset = as.integer(offset))
- 
+simulate_age <- function(n, median, min_age, max_age) {
+  
+  alpha <- -2
+  
+  omega <- (max_age - min_age) / 4.2
+  
+  median_z <- -0.584  
+  xi_corrected <- median - (median_z * omega)
+  
+  age <- numeric(0)
+  while(length(age) < n) {
+    x <- sn::rsn(
+      n = n * 2, 
+      xi = xi_corrected,
+      omega = omega,
+      alpha = alpha
+    )
+    x <- x[x >= min_age & x <= max_age]
+    age <- c(age, x)
+  }
+  
+  return(round(age[1:n]))
+}
+
+
+#--------------------------------------------------
+# Recurrence rate function
+#--------------------------------------------------
+# Timing of recurrences 5 years postoperative
+recurrence_timing <- list(
+  "Stage I"   = c("1" = 0.26, "2" = 0.28, "3" = 0.19, "4" = 0.17, "5" = 0.10),
+  "Stage II"   = c("1" = 0.30, "2" = 0.34, "3" = 0.19, "4" = 0.13, "5" = 0.03),
+  "Stage III"   = c("1" = 0.40, "2" = 0.31, "3" = 0.17, "4" = 0.08, "5" = 0.04)
+)
+
+timing_df <- tibble(
+  stage = names(recurrence_timing),
+  timing = recurrence_timing
+) %>% 
+  tidyr::unnest_longer(timing, indices_to = "offset") %>% 
+  mutate(offset = as.integer(offset))
+
 
 #--------------------------------------------------
 # UI
 #--------------------------------------------------
 
-ui <- page_sidebar(
-  
-  title = "Future recurrence estimator",
-  
-  sidebar = sidebar(
-    width = "350px",
-    
-    numericInput(
-      "n_pt", 
-      "Number of patients (n)", 
-      value = 2628, 
-      min = 100
-    ),
-    
-    sliderInput(
-      "median_age",
-      "Median age (years)",
-      min = 1,
-      max = 100,
-      value = 74
-    ),
-    
-    sliderInput(
-      "agerange",
-      "Age range (years)",
-      min = 1,
-      max = 100,
-      value = c(18, 94)
-    ),
-    
-    sliderInput(
-      "stage",
-      "Stage distribution (I:II:III [%])",
-      min = 0,
-      max = 100,
-      value = c(27, 65)
-    ),
-    
-    selectInput(
-      "region", 
-      "Country",
-      c("Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", 
-        "Czech Republic", "Denmark", "Estonia", "Finland", 
-        "France", "Germany", "Greece", "Hungary", "Iceland", 
-        "Ireland", "Italy", "Latvia", "Lithuania", "Luxembourg", 
-        "Malta", "Netherlands", "Norway", "Poland", "Portugal", 
-        "Romania", "Slovakia", "Slovenia", "Spain", "Sweden", 
-        "Switzerland"),
-      selected = "Denmark", 
-      multiple = FALSE, 
-      selectize = TRUE
-    ),
-    
-    sliderInput(
-      "stageI_rec_rate",
-      "Stage I recurrence rate (%):",
-      min = 0,
-      max = 100,
-      value = 6.5,
-      step = 0.5,
-      post = "%"
-    ),
-    
-    sliderInput(
-      "stageII_rec_rate",
-      "Stage II recurrence rate (%):",
-      min = 0,
-      max = 100,
-      value = 15,
-      step = 0.5,
-      post = "%"
-    ),
-    
-    sliderInput(
-      "stageIII_rec_rate",
-      "Stage III recurrence rate (%):",
-      min = 0,
-      max = 100,
-      value = 26,
-      step = 0.5,
-      post = "%"
-    ),
-    
-    sliderInput(
-      "rec_rate_change",
-      "Annual change in recurrence rate (%):",
-      min = -2,
-      max = 2,
-      value = 0,
-      step = 0.25,
-      post = "%"
+ui <- page_navbar(
+
+  title = "CRC projections 2025–2050",
+
+  # ============================================================
+  # DEFINE POPULATION
+  # ============================================================
+
+  nav_panel(
+    "Define population",
+
+    div(
+      class = "app-container",
+
+      page_sidebar(
+
+        sidebar = sidebar(
+          width = "350px",
+
+          h5("Population characteristics"),
+
+          p(
+            "Set the population characteristics below to explore ",
+            "incidence rates by UICC stage and age group."
+          ),
+
+          numericInput(
+            "n_pt", 
+            "Number of patients (n)", 
+            value = 2628, 
+            min = 100
+          ),
+
+          sliderInput(
+            "median_age",
+            "Median age (years)",
+            min = 1,
+            max = 100,
+            value = 74
+          ),
+
+          sliderInput(
+            "agerange",
+            "Age range (years)",
+            min = 1,
+            max = 100,
+            value = c(18, 94)
+          ),
+
+          sliderInput(
+            "stage",
+            "Stage distribution (I:II:III [%])",
+            min = 0,
+            max = 100,
+            value = c(27, 65)
+          ),
+
+          selectInput(
+            "region", 
+            "Country",
+            c(
+              "Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", 
+              "Czech Republic", "Denmark", "Estonia", "Finland", 
+              "France", "Germany", "Greece", "Hungary", "Iceland", 
+              "Ireland", "Italy", "Latvia", "Lithuania", "Luxembourg", 
+              "Malta", "Netherlands", "Norway", "Poland", "Portugal", 
+              "Romania", "Slovakia", "Slovenia", "Spain", "Sweden", 
+              "Switzerland"
+            ),
+            selected = "Denmark",
+            multiple = FALSE,
+            selectize = TRUE
+          )
+        ),
+
+        card(
+          card_header(
+            "Define the cancer population",
+            style = "font-size: 1.25rem;"
+          ),
+
+          navset_underline(
+
+            nav_panel(
+              "Cancer cohort",
+
+              plotOutput("age_hist", height = 500),
+
+              card(
+                card_header("Cancer population in 2025"),
+                p(
+                  "The simulated cancer cohort is defined by the number ",
+                  "of patients, median age, age range, and UICC stage ",
+                  "distribution specified in the sidebar."
+                ),
+                p(
+                  "The age distribution is simulated using a skew-normal ",
+                  "distribution and is recalculated whenever the population ",
+                  "characteristics are changed."
+                )
+              )
+            ),
+
+            nav_panel(
+              "Country demographics",
+
+              plotlyOutput("region_hist", height = 500),
+
+              card(
+                card_header("Country demographics"),
+                p(
+                  "The figure shows the age distribution of the selected ",
+                  "country's population in 2025."
+                ),
+                p(
+                  "Use the animation controls in the figure to explore ",
+                  "changes in the population structure over time."
+                )
+              )
+            ),
+
+            nav_panel(
+              "Incidence by age and stage",
+
+              plotOutput("inc_rates", height = 500),
+
+              card(
+                card_header(
+                  "Age-group-specific incidence rates of colorectal cancer in 2025"
+                ),
+                p(
+                  "Stratum-specific incidence of colorectal cancer per ",
+                  "100,000 people by age group and UICC stage."
+                ),
+                p(
+                  "Rates are calculated from the defined cohort of ",
+                  "non-metastatic colorectal cancer patients in 2025 and ",
+                  "the population of the selected country."
+                )
+              )
+            )
+          )
+        )
+      )
     )
   ),
-  
-  layout_column_wrap(
-    width = 1/3,
-    
-    card(
-      full_screen = TRUE,
-      card_header("Cancer population (2025)"),
-      plotOutput("age_hist", height = 250),
-      ),
-    
-    card(
-      full_screen = TRUE,
-      card_header("Country demographics (2025)"),
-      plotOutput("region_hist", height = 250),
-      ),
-    
-    card(
-      full_screen = TRUE,
-      card_header("Incidence of cancer by age group and stage (2025)"),
-      plotOutput("inc_rates", height = 250),
-    ),
+
+
+  # ============================================================
+  # PROJECTIONS
+  # ============================================================
+
+  nav_panel(
+    "Projections",
+
+    div(
+      class = "app-container",
+
+      page_sidebar(
+
+        sidebar = sidebar(
+          width = "350px",
+
+          h5("Recurrence assumptions"),
+
+          p(
+            "Adjust the recurrence assumptions below to explore how ",
+            "changes in recurrence rates affect the projections. ",
+            "The figures update automatically."
+          ),
+
+          sliderInput(
+            "stageI_rec_rate",
+            "Stage I recurrence rate:",
+            min = 0,
+            max = 100,
+            value = 6.5,
+            step = 0.5,
+            post = "%"
+          ),
+
+          sliderInput(
+            "stageII_rec_rate",
+            "Stage II recurrence rate:",
+            min = 0,
+            max = 100,
+            value = 15,
+            step = 0.5,
+            post = "%"
+          ),
+
+          sliderInput(
+            "stageIII_rec_rate",
+            "Stage III recurrence rate:",
+            min = 0,
+            max = 100,
+            value = 26,
+            step = 0.5,
+            post = "%"
+          ),
+
+          sliderInput(
+            "rec_rate_change",
+            "Annual change in recurrence rate:",
+            min = -2,
+            max = 2,
+            value = 0,
+            step = 0.25,
+            post = "%"
+          )
+        ),
+
+        card(
+          card_header(
+            "Projections of colorectal cancer incidence and recurrence, 2025–2050",
+            style = "font-size: 1.25rem;"
+          ),
+
+          navset_underline(
+
+            nav_panel(
+              "Cancer incidence",
+
+              plotOutput("cancer_inc", height = 500),
+
+              card(
+                card_header(
+                  "Projected number of non-metastatic colorectal cancer patients"
+                ),
+                p(
+                  "This figure shows the projected number of non-metastatic ",
+                  "colorectal cancer patients from 2025 to 2050."
+                ),
+                p(
+                  "The projection accounts for changes in the underlying ",
+                  "population demographics of the selected country."
+                )
+              )
+            ),
+
+            nav_panel(
+              "Recurrence incidence",
+
+              plotOutput("rec_rates", height = 500),
+
+              card(
+                card_header(
+                  "Cumulative incidence of recurrence by UICC stage"
+                ),
+                p(
+                  "This figure shows the cumulative incidence of recurrence ",
+                  "during the first five years after surgery for each UICC stage."
+                ),
+                p(
+                  "The curves are based on the stage-specific recurrence rates ",
+                  "specified in the sidebar and the assumed timing of recurrence."
+                )
+              )
+            ),
+
+            nav_panel(
+              "Recurrences",
+
+              plotOutput("rec_pred", height = 500),
+
+              card(
+                card_header(
+                  "Projected number of colorectal cancer recurrences"
+                ),
+                p(
+                  "This figure shows the projected number of patients ",
+                  "experiencing colorectal cancer recurrence from 2025 to 2050."
+                ),
+                p(
+                  "The projections are based on the defined cancer population ",
+                  "and the recurrence assumptions specified in the sidebar."
+                ),
+                p(
+                  "The total number of recurrences in 2030 is estimated to ",
+                  textOutput("num_recs_2030", inline = TRUE),
+                  " and ",
+                  textOutput("num_recs_2050", inline = TRUE),
+                  " in 2050."
+                )
+              )
+            ),
+
+            nav_panel(
+              "Age at recurrence",
+
+              plotOutput("rec_age_dist", height = 500),
+
+              card(
+                card_header(
+                  "Predicted age distribution at recurrence diagnosis"
+                ),
+                p(
+                  "This figure illustrates the age distribution of patients ",
+                  "at the time of recurrence diagnosis in 2030, 2040, and 2050."
+                ),
+                p(
+                  "The distribution reflects the age structure of the ",
+                  "underlying cancer population and the assumed recurrence pattern."
+                )
+              )
+            )
+          )
+        )
+      )
+    )
   ),
-  
-  layout_column_wrap(
-    width = 1/3,
-    
-    card(
-      full_screen = TRUE,
-      card_header("Incidence of recurrence"),
-      plotOutput("rec_rates", height = 250),
-    ),
-    
-    card(
-      full_screen = TRUE,
-      card_header("Prediction of cancer incidence"),
-      plotOutput("cancer_inc", height = 250),
-    ),
-    
-    card(
-      full_screen = TRUE,
-      card_header("Prediction of recurrences"),
-      plotOutput("rec_pred", height = 250),
-    ),
+
+
+  # ============================================================
+  # ABOUT
+  # ============================================================
+
+  nav_panel(
+    "About",
+
+    div(
+      class = "app-container",
+
+      page_fillable(
+
+        card(
+          card_header("About this model"),
+
+          p(
+            "This application projects colorectal cancer incidence ",
+            "and recurrence from 2025 to 2050."
+          ),
+
+          p(
+            "The user can define a cancer population by number of patients, ",
+            "age distribution, UICC stage distribution, and country. ",
+            "Recurrence assumptions can then be adjusted to explore ",
+            "projected recurrence patterns."
+          )
+        ),
+
+        card(
+          card_header("Data sources"),
+
+          p(
+            "Population projections are based on Eurostat demographic ",
+            "projections."
+          ),
+
+          p(
+            "Additional methodological information and references can ",
+            "be provided here."
+          )
+        ),
+
+        card(
+          card_header("References and contacts"),
+
+          p("References and contact information can be provided here.")
+        ),
+
+        card(
+          card_header("Acknowledgements"),
+
+          p("Acknowledgements can be provided here.")
+        )
+      )
+    )
   ),
-  
-  card(
-    full_screen = TRUE,
-    card_header("Age distribution at recurrence diagnosis"),
-    plotOutput("rec_age_dist", height = 250),
-  ),
-  
+
+
+  # ============================================================
+  # THEME
+  # ============================================================
+
   theme = bs_theme(
     bg = "#fff",
     fg = "#000",
@@ -277,13 +512,71 @@ ui <- page_sidebar(
     secondary = "#0072B2",
     success = "#009E73",
     base_font = font_google("Inter"),
-    code_font = font_google("JetBrains Mono"),
-    sidebar_title_font_size = "0.5rem",
-    sidebar_font_size = "0.5rem" 
+    code_font = font_google("JetBrains Mono")
+  ),
+
+  header = tags$head(
+    tags$style(HTML("
+    
+    /* --------------------------------------------------------
+       Overall app width
+       -------------------------------------------------------- */
+    
+    .app-container {
+      width: 1100px;
+      max-width: calc(100vw - 2rem);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    
+    /* --------------------------------------------------------
+       Sidebar width
+       350 px sidebar + flexible main area
+       -------------------------------------------------------- */
+    
+    .app-container .bslib-sidebar-layout {
+      --bslib-sidebar-width: 350px;
+    }
+    
+    
+    /* --------------------------------------------------------
+       Keep content usable on smaller screens
+       -------------------------------------------------------- */
+    
+    @media (max-width: 768px) {
+      
+      .app-container {
+        width: 100%;
+        max-width: calc(100vw - 1rem);
+      }
+      
+    }
+    
+    
+    /* --------------------------------------------------------
+       Output navigation
+       -------------------------------------------------------- */
+    
+    .app-container .nav-underline {
+      margin-bottom: 1rem;
+    }
+    
+    
+    /* --------------------------------------------------------
+       Figure explanation cards
+       -------------------------------------------------------- */
+    
+    .app-container .card {
+      margin-top: 1rem;
+    }
+    
+  "))
   )
 )
 
-#--------------------------------------------------
+
+
 # Server
 #--------------------------------------------------
 
@@ -322,14 +615,14 @@ server <- function(input, output, session){
       )
     )
   })
-
+  
   #--------------------------------------------------
   # Calculation: Age pyramid for selected country
   #--------------------------------------------------
   country <- reactive({
     df_populations %>%
       filter(region == input$region) %>%
-      select(`2025`, age)
+      select(num_range("", 2025:2050), age)
   })
   
   #--------------------------------------------------
@@ -395,7 +688,7 @@ server <- function(input, output, session){
   #--------------------------------------------------
   # Detailed incidence rates:
   incidence_data_pred <- reactive({
-      cancer_counts <- patients() %>%
+    cancer_counts <- patients() %>%
       group_by(age, stage) %>%
       summarise(cancer_cases = n(), .groups = "drop") %>%
       tidyr::complete(age = 1:99, stage, fill = list(cancer_cases = 0))
@@ -487,6 +780,23 @@ server <- function(input, output, session){
       select(year_recurrence, age_recurrence, stage, recurrence_cases)
   })
   
+  # Render the number of recurrences as a string
+  output$num_recs_2030 <- renderText({
+    recurrence_pred() %>%
+      filter(year_recurrence == 2030) %>%
+      group_by(year_recurrence) %>%
+      summarise(n = round(sum(recurrence_cases, na.rm = TRUE)), .groups = "drop") %>%
+      pull(n)
+  })
+  
+  output$num_recs_2050 <- renderText({
+    recurrence_pred() %>%
+      filter(year_recurrence == 2050) %>%
+      group_by(year_recurrence) %>%
+      summarise(n = round(sum(recurrence_cases, na.rm = TRUE)), .groups = "drop") %>%
+      pull(n)
+  })
+  
   #--------------------------------------------------
   # Plot: Age and stage distribution
   #--------------------------------------------------
@@ -510,30 +820,52 @@ server <- function(input, output, session){
       scale_x_continuous(expand = c(0, 0)) +
       theme_app() +
       theme(
-        legend.position = c(0.2,0.8)
+        legend.position = "right"
       )
   })
-
-
+  
+  
   #--------------------------------------------------
   # Plot: Country demographics
   #--------------------------------------------------
-  output$region_hist <- renderPlot({
+  output$region_hist <- renderPlotly({
     
-    ggplot(country(), aes(x = age, y = `2025`)) +
+    plot_data <- country() %>%
+      pivot_longer(
+        cols = !age,
+        names_to = "Year",
+        values_to = "Citizens") %>%
+      mutate(Year = as.numeric(Year)) 
+    
+    p <- ggplot(plot_data, aes(x = age, y = Citizens, frame = Year, group = age)) +
       geom_col(
         colour = "white",
         fill = col_palette[1],
-        linewidth = 0.2) +
+        linewidth = 0.2,
+        position = "identity"
+      ) +
       labs(
         x = "Age (years)",
-        y = "Number of citizens") +
+        y = "Number of citizens"
+      ) +
       coord_cartesian(xlim = c(0, 100)) +
       scale_y_continuous(expand = expansion(mult = c(0, 0.10))) +
       scale_x_continuous(expand = c(0, 0)) +
       theme_app()
+    
+    ggplotly(p) %>%
+      layout(
+        xaxis = list(
+          title = list(font = list(size = 12)),
+          tickfont = list(size = 10)
+        ),
+        yaxis = list(
+          title = list(font = list(size = 12)),
+          tickfont = list(size = 10)
+        )
+      )
   })
-
+  
   #--------------------------------------------------
   # Plot: Incidence rates
   #--------------------------------------------------
@@ -554,11 +886,11 @@ server <- function(input, output, session){
                          values = col_palette) +
       theme_app() +
       theme(
-        legend.position = c(0.2,0.8),
+        legend.position = "right",
         axis.text.x = element_text(angle = 45, hjust = 1)
       )
   })
-
+  
   #--------------------------------------------------
   # Plot: Cumulative incidence of recurrence
   #--------------------------------------------------
@@ -579,7 +911,7 @@ server <- function(input, output, session){
                          labels = c("Stage I", "Stage II", "Stage III")) +
       theme_app() +
       theme(
-        legend.position = c(0.2,0.8)
+        legend.position = "right"
       )
   })
   
@@ -639,6 +971,7 @@ server <- function(input, output, session){
       theme_app()
   })
   
+  
   #--------------------------------------------------
   # Plot: Age distribution pyramid for 2030, 2040, 2050
   #--------------------------------------------------
@@ -658,7 +991,7 @@ server <- function(input, output, session){
       mutate(prob = n / sum(n)) %>%
       ungroup() %>%
       mutate(
-        label_text = paste0(round(prob * 100, 1), "% / n=", ceiling(n))
+        label_text = paste0(round(prob * 100, 1), "% / n=", round(n))
       )
     
     ggplot(df_rec_prob, aes(x = GROUP, y = n, fill = as.factor(year_recurrence))) +
@@ -691,4 +1024,3 @@ server <- function(input, output, session){
 #--------------------------------------------------
 
 shinyApp(ui, server)
-
